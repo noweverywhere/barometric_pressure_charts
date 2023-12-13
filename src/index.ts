@@ -32,7 +32,11 @@ const saveImage = (buffer: Buffer, filename: string): void => {
 const imageFetchingTask = async (url: string): Promise<void> => {
   const filename = join(imagesDir, `${Date.now()}.gif`);
   await fetchImage(url).then(buffer => saveImage(buffer, filename));
-  combineImagesIntoVideo(videoFile);
+  try {
+    combineImagesIntoVideo(videoFile);
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 const scheduleImageFetching = (url: string): void => {
