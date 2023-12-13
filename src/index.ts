@@ -56,24 +56,27 @@ const combineImagesIntoVideo = (outputFile: string): void => {
 };
 
 const serveApp = (): void => {
- const app = express();
- app.use(express.static(publicDir));
- app.get('/tasks', (_req, res) => {
-   const tasks = nodeCron.getTasks();
-   res.json(tasks);
- });
- app.get('/fetchImage', async (_req, res) => {
-   try {
+  const app = express();
+  app.use(express.static(publicDir));
+
+  app.get('/tasks', (_req, res) => {
+    const tasks = nodeCron.getTasks();
+    res.json(tasks);
+  });
+
+  app.get('/fetchImage', async (_req, res) => {
+    try {
       await imageFetchingTask(url);
       res.send({ success: true });
-   } catch (error) {
+    } catch (error) {
       res.send({ success: false, error });
       console.error(error);
-   }
+    }
   });
- app.listen(PORT, () => {
-   console.log('Server started on port', PORT);
- });
+
+  app.listen(PORT, () => {
+    console.log('Server started on port', PORT);
+  });
 };
 
 scheduleImageFetching(url);
