@@ -1,15 +1,24 @@
 import axios from 'axios';
-import { writeFileSync, readdirSync } from 'fs';
-import { schedule, getTasks } from 'node-cron';
-import * as  FfmpegCommand from 'fluent-ffmpeg';
-import * as express from 'express';
-import { resolve, extname } from 'path';
+import { existsSync, writeFileSync, readdirSync, mkdirSync } from 'fs';
+import * as nodeCron from 'node-cron';
+import FfmpegCommand from 'fluent-ffmpeg';
+import express from "express";
+import { resolve, extname, join } from 'path';
 
 const PORT = process.env.PORT || 7667;
 
-const publicDir = resolve(__dirname, 'public');
+const projectDir = resolve(__dirname, '..');
+const publicDir = join(projectDir, 'public');
+const imagesDir = join(projectDir, 'images');
+
+[publicDir, imagesDir].forEach(dir => {
+  if (!existsSync(dir)) {
+    mkdirSync(dir);
+  }
+});
+
 const url = 'https://weather.gc.ca/data/analysis/947_100.gif';
-const videoFile = './public/video.webm';
+const videoFile = join(publicDir, 'video.webm');
 
 const fetchImage = async (url: string): Promise<Buffer> => {
  const response = await axios.get(url, { responseType: 'arraybuffer' });
@@ -20,19 +29,21 @@ const saveImage = (buffer: Buffer, filename: string): void => {
  writeFileSync(filename, buffer);
 };
 
+const imageFetchingTask = async (url: string): Promise<void> => {
+  const filename = join(imagesDir, `${Date.now()}.gif`);
+  await fetchImage(url).then(buffer => saveImage(buffer, filename));
+  combineImagesIntoVideo(videoFile);
+};
+
 const scheduleImageFetching = (url: string): void => {
- schedule('0 */6 * * *', async () => {
-   const filename = `./public/${Date.now()}.gif`;
-   await fetchImage(url).then(buffer => saveImage(buffer, filename));
-   combineImagesIntoVideo(videoFile);
- });
+ nodeCron.schedule('0 */6 * * *', imageFetchingTask.bind(null, url));
 };
 
 const combineImagesIntoVideo = (outputFile: string): void => {
   const command = FfmpegCommand()
-   const files = readdirSync(publicDir).filter(file => extname(file).toLowerCase() === '.gif');
+   const files = readdirSync(imagesDir).filter(file => extname(file).toLowerCase() === '.gif');
    for (const file of files) {
-     command.input(`public/${file}`);
+     command.input(join(imagesDir, file));
    }
    command.outputOptions('-framerate 1/6')
    .output(outputFile)
@@ -42,11 +53,20 @@ const combineImagesIntoVideo = (outputFile: string): void => {
 
 const serveApp = (): void => {
  const app = express();
- app.use(express.static('public'));
+ app.use(express.static(publicDir));
  app.get('/tasks', (_req, res) => {
-   const tasks = getTasks();
+   const tasks = nodeCron.getTasks();
    res.json(tasks);
  });
+ app.get('/fetchImage', async (_req, res) => {
+   try {
+      await imageFetchingTask(url);
+      res.send({ success: true });
+   } catch (error) {
+      res.send({ success: false, error });
+      console.error(error);
+   }
+  });
  app.listen(PORT, () => {
    console.log('Server started on port', PORT);
  });
@@ -54,3 +74,4 @@ const serveApp = (): void => {
 
 scheduleImageFetching(url);
 serveApp();
+debugger
